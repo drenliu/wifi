@@ -121,6 +121,9 @@ type Interface struct {
 
 	// The interface's wireless frequency in MHz.
 	Frequency int
+
+	// The interface's wireless frequency width.
+	FreqWidth string
 }
 
 // StationInfo contains statistics about a WiFi interface operating in

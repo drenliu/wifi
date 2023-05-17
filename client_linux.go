@@ -292,6 +292,26 @@ func (ifi *Interface) idAttrs() []netlink.Attribute {
 	}
 }
 
+// parse Freq Width
+func parseFreqWidth(width int) string {
+	switch width {
+	case unix.NL80211_CHAN_WIDTH_20_NOHT:
+		return "20 MHz (no HT)"
+	case unix.NL80211_CHAN_WIDTH_20:
+		return "20 MHz"
+	case unix.NL80211_CHAN_WIDTH_40:
+		return "40 MHz"
+	case unix.NL80211_CHAN_WIDTH_80:
+		return "80 MHz"
+	case unix.NL80211_CHAN_WIDTH_80P80:
+		return "80+80 MHz"
+	case unix.NL80211_CHAN_WIDTH_160:
+		return "160 MHz"
+	default:
+		return "unknown"
+	}
+}
+
 // parseAttributes parses netlink attributes into an Interface's fields.
 func (ifi *Interface) parseAttributes(attrs []netlink.Attribute) error {
 	for _, a := range attrs {
@@ -312,6 +332,8 @@ func (ifi *Interface) parseAttributes(attrs []netlink.Attribute) error {
 			ifi.Device = int(nlenc.Uint64(a.Data))
 		case unix.NL80211_ATTR_WIPHY_FREQ:
 			ifi.Frequency = int(nlenc.Uint32(a.Data))
+		case unix.NL80211_ATTR_CHANNEL_WIDTH:
+			ifi.FreqWidth = parseFreqWidth(int(nlenc.Uint32(a.Data)))
 		}
 	}
 

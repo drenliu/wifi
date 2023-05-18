@@ -124,6 +124,9 @@ type Interface struct {
 
 	// The interface's wireless frequency width.
 	FreqWidth string
+
+	// Thinterface's  wireless transmit power in dBm
+	TxPower int
 }
 
 // StationInfo contains statistics about a WiFi interface operating in

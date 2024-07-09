@@ -256,12 +256,15 @@ func TestLinux_clientStationInfoNoMessagesIsNotExist(t *testing.T) {
 		return nil, io.EOF
 	})
 
-	_, err := c.StationInfo(&Interface{
+	info, err := c.StationInfo(&Interface{
 		Index:        1,
 		HardwareAddr: net.HardwareAddr{0xe, 0xad, 0xbe, 0xef, 0xde, 0xad},
 	})
-	if !os.IsNotExist(err) {
-		t.Fatalf("expected is not exist, got: %v", err)
+	if err != nil {
+		t.Fatalf("undexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(info, []*StationInfo{}) {
+		t.Fatalf("expected info to be an empty slice, got %v", info)
 	}
 }
 
@@ -276,6 +279,7 @@ func TestLinux_clientStationInfoOK(t *testing.T) {
 			ReceivedPackets:    10,
 			TransmittedPackets: 20,
 			Signal:             -50,
+			SignalAverage:      -53,
 			TransmitRetries:    5,
 			TransmitFailed:     2,
 			BeaconLoss:         3,
@@ -291,6 +295,7 @@ func TestLinux_clientStationInfoOK(t *testing.T) {
 			ReceivedPackets:    20,
 			TransmittedPackets: 40,
 			Signal:             -25,
+			SignalAverage:      -27,
 			TransmitRetries:    10,
 			TransmitFailed:     4,
 			BeaconLoss:         6,
@@ -493,6 +498,7 @@ func (s *StationInfo) attributes() []netlink.Attribute {
 				{Type: unix.NL80211_STA_INFO_TX_BYTES, Data: nlenc.Uint32Bytes(uint32(s.TransmittedBytes))},
 				{Type: unix.NL80211_STA_INFO_TX_BYTES64, Data: nlenc.Uint64Bytes(uint64(s.TransmittedBytes))},
 				{Type: unix.NL80211_STA_INFO_SIGNAL, Data: []byte{byte(int8(s.Signal))}},
+				{Type: unix.NL80211_STA_INFO_SIGNAL_AVG, Data: []byte{byte(int8(s.SignalAverage))}},
 				{Type: unix.NL80211_STA_INFO_RX_PACKETS, Data: nlenc.Uint32Bytes(uint32(s.ReceivedPackets))},
 				{Type: unix.NL80211_STA_INFO_TX_PACKETS, Data: nlenc.Uint32Bytes(uint32(s.TransmittedPackets))},
 				{Type: unix.NL80211_STA_INFO_TX_RETRIES, Data: nlenc.Uint32Bytes(uint32(s.TransmitRetries))},
@@ -552,5 +558,51 @@ func mustMessages(t *testing.T, command uint8, want interface{}) genltest.Func {
 
 	return func(_ genetlink.Message, _ netlink.Message) ([]genetlink.Message, error) {
 		return msgs, nil
+	}
+}
+
+func Test_decodeBSSLoad(t *testing.T) {
+	type args struct {
+		b []byte
+	}
+	tests := []struct {
+		name                           string
+		args                           args
+		wantVersion                    uint16
+		wantStationCount               uint16
+		wantChannelUtilization         uint8
+		wantAvailableAdmissionCapacity uint16
+	}{
+		{name: "Parse BSS Load Normal", args: args{b: []byte{3, 0, 8, 0x8D, 0x5B}}, wantVersion: 2, wantStationCount: 3, wantChannelUtilization: 8, wantAvailableAdmissionCapacity: 23437},
+		{name: "Parse BSS Load Version 1", args: args{b: []byte{9, 0, 8, 0x8D}}, wantVersion: 1, wantStationCount: 9, wantChannelUtilization: 8, wantAvailableAdmissionCapacity: 141},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bssLoad, _ := decodeBSSLoad(tt.args.b)
+			gotVersion := bssLoad.Version
+			gotStationCount := bssLoad.StationCount
+			gotChannelUtilization := bssLoad.ChannelUtilization
+			gotAvailableAdmissionCapacity := bssLoad.AvailableAdmissionCapacity
+			if uint16(gotVersion) != tt.wantVersion {
+				t.Errorf("decodeBSSLoad() gotVersion = %v, want %v", gotVersion, tt.wantVersion)
+			}
+			if gotStationCount != tt.wantStationCount {
+				t.Errorf("decodeBSSLoad() gotStationCount = %v, want %v", gotStationCount, tt.wantStationCount)
+			}
+			if gotChannelUtilization != tt.wantChannelUtilization {
+				t.Errorf("decodeBSSLoad() gotChannelUtilization = %v, want %v", gotChannelUtilization, tt.wantChannelUtilization)
+			}
+			if gotAvailableAdmissionCapacity != tt.wantAvailableAdmissionCapacity {
+				t.Errorf("decodeBSSLoad() gotAvailableAdmissionCapacity = %v, want %v", gotAvailableAdmissionCapacity, tt.wantAvailableAdmissionCapacity)
+			}
+		})
+	}
+}
+
+func Test_decodeBSSLoadError(t *testing.T) {
+	t.Parallel()
+	_, err := decodeBSSLoad([]byte{3, 0, 8})
+	if err == nil {
+		t.Error("want error on bogus IE with wrong length")
 	}
 }
